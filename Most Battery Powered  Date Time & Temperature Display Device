@@ -1,0 +1,79 @@
+from machine import Pin, I2C
+from ssd1306 import SSD1306_I2C
+
+import machine
+import utime
+ 
+sensor_temp = machine.ADC(4)
+conversion_factor = 3.3 / (65535)
+sda = machine.Pin(20)
+scl = machine.Pin(21)
+i2c = machine.I2C(0,sda=sda,scl=scl,freq=400000)
+
+print("I2C Address      : "+hex(i2c.scan()[0]).upper()) 
+print("I2C Configuration: "+str(i2c))                   
+ 
+ 
+oled = SSD1306_I2C(128, 64, i2c)                 
+print()
+print("YYYY MM DD HH MM SS")
+dateTime = (input ("Enter current date & time:"))+' 0 0'
+givenTime = utime.mktime(list(map(int,tuple(dateTime.split(' ')))))
+ 
+ctime = utime.localtime(givenTime)
+setup_0 = (ctime[0] << 12) | (ctime[1] << 8) | ctime[2]
+
+def weekDay(year, month, day):
+    offset = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
+    afterFeb = 1
+    if month > 2: afterFeb = 0
+    aux = year - 1700 - afterFeb
+    
+    dayOfWeek  = 5
+    
+    dayOfWeek += (aux + afterFeb) * 365                  
+    
+    dayOfWeek += aux // 4 - aux // 100 + (aux + 100) // 400     
+    
+    dayOfWeek += offset[month - 1] + (day - 1)    
+    dayOfWeek += 1
+    dayOfWeek %= 7
+    return int(dayOfWeek)
+
+
+setup_1 =  (ctime[3] << 16) | (ctime[4] << 8) | ctime[5]
+setup_1 =  setup_1 |  (weekDay(ctime[0],ctime[1],ctime[2]) << 24)
+
+
+
+
+machine.mem32[0x4005c004]= setup_0
+machine.mem32[0x4005c008]= setup_1
+machine.mem8[0x4005c00c] = machine.mem8[0x4005c00c] | 0x10
+
+while True:
+    
+    reading = sensor_temp.read_u16() * conversion_factor
+    temperature = 27 - (reading - 0.706)/0.001721
+    print(temperature)
+    reading = ctime
+    ctime = utime.localtime(givenTime)
+    
+    oled.fill(0)       
+    
+
+    
+
+    
+    oled.text("HAPPY NEW YEAR",0,0)
+    oled.text("Temp: ",0,20)
+    oled.text(str(round(temperature,2)),50,20)
+    oled.text("*C",95,20)
+    oled.text(str(utime.localtime())[1:13],45,35)
+    oled.text(str(utime.localtime())[13:-1],0,55)
+    oled.text("Date:",0,35)
+    oled.text("Time:      W: D:",0,45)
+    
+             
+    oled.show()
+    utime.sleep(0.5)
